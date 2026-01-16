@@ -1,0 +1,10 @@
+{
+  "targets": [
+    {
+      "runtime": "napi",
+      "abi": 8
+    }
+  ],
+  "strip": true,
+  "napi": true
+}

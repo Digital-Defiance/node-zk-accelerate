@@ -1,0 +1,13 @@
+{
+  "version": "0.1.1",
+  "platform": "darwin",
+  "arch": "arm64",
+  "created": "2026-01-17T00:57:54.840Z",
+  "artifacts": {
+    "native": true,
+    "rust": true,
+    "metal": true
+  },
+  "nodeVersion": "v22.21.1",
+  "napiVersion": 8
+}

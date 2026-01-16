@@ -1,0 +1,41 @@
+# Source files (TypeScript)
+src/
+
+# Test files
+**/*.test.ts
+**/*.prop.test.ts
+**/*.spec.ts
+
+# Configuration files
+.eslintrc.json
+.prettierrc
+.prettierignore
+tsconfig*.json
+vitest.config.ts
+.prebuildrc
+
+# Development files
+.github/
+.vscode/
+.kiro/
+
+# Build artifacts (keep prebuilds)
+build/
+native-rust/target/
+
+# Git
+.git/
+.gitignore
+
+# Yarn
+.yarn/
+.yarnrc.yml
+yarn.lock
+
+# Documentation (keep README)
+docs/
+
+# Misc
+*.log
+*.tgz
+coverage/

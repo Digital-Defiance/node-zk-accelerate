@@ -1,0 +1,181 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Run ESLint
+        run: yarn lint
+
+      - name: Check formatting
+        run: yarn format:check
+
+  build-typescript:
+    name: Build TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build TypeScript
+        run: yarn build:ts
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+  build-native:
+    name: Build Native - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Apple Silicon macOS
+          - os: macos-14
+            target: aarch64-apple-darwin
+            arch: arm64
+          # Intel macOS (for compatibility testing)
+          - os: macos-13
+            target: x86_64-apple-darwin
+            arch: x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build Native C++ addon
+        run: yarn build:native
+
+      - name: Build Rust addon
+        run: yarn build:rust
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
+
+      - name: Compile Metal shaders
+        if: runner.os == 'macOS'
+        run: yarn build:metal
+
+      - name: Upload native artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            build/
+            native-rust/*.node
+            native/compiled-shaders/
+          retention-days: 1
+
+  test:
+    name: Test - ${{ matrix.os }}
+    needs: [build-typescript, build-native]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            arch: arm64
+          - os: macos-13
+            arch: x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Download native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: native-${{ matrix.os }}-${{ matrix.arch }}
+          path: .
+
+      - name: Run tests
+        run: yarn test
+
+  test-wasm-fallback:
+    name: Test WASM Fallback
+    needs: build-typescript
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Download dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Run tests (WASM fallback mode)
+        run: yarn test
+        env:
+          ZK_ACCELERATE_FORCE_WASM: '1'

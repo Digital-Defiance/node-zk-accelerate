@@ -1,0 +1,129 @@
+{
+  "name": "@digitaldefiance/node-zk-accelerate",
+  "version": "0.1.1",
+  "description": "Zero-Knowledge Proof acceleration library for Node.js maximizing Apple Silicon M4 Max hardware utilization",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "packageManager": "yarn@4.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "native",
+    "native-rust",
+    "binding.gyp",
+    "prebuilds",
+    "scripts"
+  ],
+  "scripts": {
+    "build": "yarn build:ts",
+    "build:ts": "yarn build:cjs && yarn build:esm && yarn build:types",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:types": "tsc -p tsconfig.types.json",
+    "build:native": "node-gyp rebuild",
+    "build:native:debug": "node-gyp rebuild --debug",
+    "build:rust": "cd native-rust && napi build --platform --release",
+    "build:rust:debug": "cd native-rust && napi build --platform",
+    "build:metal": "./scripts/compile-metal.sh",
+    "build:all": "yarn build && yarn build:native && yarn build:rust && yarn build:metal",
+    "build:full": "node scripts/build.js all",
+    "rebuild": "node-gyp rebuild",
+    "clean": "rm -rf dist build native-rust/target native/compiled-shaders",
+    "clean:native": "node-gyp clean",
+    "clean:rust": "cd native-rust && cargo clean",
+    "clean:metal": "rm -rf native/compiled-shaders",
+    "clean:all": "yarn clean && yarn clean:native && yarn clean:rust && yarn clean:metal",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "yarn build:all",
+    "publish:public": "npm publish --access public",
+    "prepack": "yarn build:all && yarn prebuild:all",
+    "install": "node-gyp-build || echo 'Native build skipped'",
+    "postinstall": "node scripts/postinstall.js || true",
+    "prebuild": "prebuildify --napi --strip",
+    "prebuild:all": "yarn prebuild && node scripts/create-prebuilds.js",
+    "benchmark": "node --import tsx src/benchmark/cli.ts",
+    "benchmark:quick": "node --import tsx src/benchmark/cli.ts --quick",
+    "benchmark:full": "node --import tsx src/benchmark/cli.ts --full",
+    "benchmark:json": "node --import tsx src/benchmark/cli.ts --json"
+  },
+  "keywords": [
+    "zk",
+    "zero-knowledge",
+    "zkp",
+    "snark",
+    "msm",
+    "ntt",
+    "cryptography",
+    "apple-silicon",
+    "metal",
+    "accelerate"
+  ],
+  "author": "Digital Defiance",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/digitaldefiance/node-zk-accelerate.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "dependencies": {
+    "@digitaldefiance/node-fhe-accelerate": "^0.1.0",
+    "node-addon-api": "^7.0.0",
+    "node-gyp-build": "^4.8.0"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.5.1",
+    "@types/node": "^22.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "fast-check": "^3.14.0",
+    "node-gyp": "^12.1.0",
+    "prebuildify": "^6.0.0",
+    "prettier": "^3.1.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.6.0",
+    "vitest": "^1.0.0"
+  },
+  "peerDependencies": {
+    "node-gyp": "^10.0.0"
+  },
+  "peerDependenciesMeta": {
+    "node-gyp": {
+      "optional": true
+    }
+  },
+  "gypfile": true,
+  "binary": {
+    "napi_versions": [
+      8
+    ]
+  }
+}

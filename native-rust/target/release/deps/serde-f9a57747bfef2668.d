@@ -1,0 +1,14 @@
+/Volumes/Code/source/repos/node-zk-accelerate/native-rust/target/release/deps/serde-f9a57747bfef2668.d: /Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Volumes/Code/source/repos/node-zk-accelerate/native-rust/target/release/build/serde-a0a1989ea1f102b8/out/private.rs
+
+/Volumes/Code/source/repos/node-zk-accelerate/native-rust/target/release/deps/libserde-f9a57747bfef2668.rlib: /Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Volumes/Code/source/repos/node-zk-accelerate/native-rust/target/release/build/serde-a0a1989ea1f102b8/out/private.rs
+
+/Volumes/Code/source/repos/node-zk-accelerate/native-rust/target/release/deps/libserde-f9a57747bfef2668.rmeta: /Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Volumes/Code/source/repos/node-zk-accelerate/native-rust/target/release/build/serde-a0a1989ea1f102b8/out/private.rs
+
+/Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/Users/jessica/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/Volumes/Code/source/repos/node-zk-accelerate/native-rust/target/release/build/serde-a0a1989ea1f102b8/out/private.rs:
+
+# env-dep:OUT_DIR=/Volumes/Code/source/repos/node-zk-accelerate/native-rust/target/release/build/serde-a0a1989ea1f102b8/out
