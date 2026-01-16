@@ -1,0 +1,14 @@
+{
+  "name": "zk-accelerate-rs",
+  "version": "0.1.0",
+  "private": true,
+  "napi": {
+    "name": "zk-accelerate-rs",
+    "triples": {
+      "defaults": false,
+      "additional": [
+        "aarch64-apple-darwin"
+      ]
+    }
+  }
+}
