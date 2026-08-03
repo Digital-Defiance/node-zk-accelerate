@@ -1,16 +1,32 @@
 /**
- * GPU-accelerated MSM (Multi-Scalar Multiplication)
+ * GPU MSM (Multi-Scalar Multiplication) entry point
  *
- * This module provides Metal GPU acceleration for MSM operations
- * using Pippenger's bucket method with sparse matrix transposition.
+ * ## Status: no GPU MSM is dispatched from this module
+ *
+ * `msmGPU` throws. There is no path from TypeScript to an MSM compute kernel:
+ * `native/src/metal_msm.mm` contains `metal_gpu_msm` and is compiled by
+ * `binding.gyp`, but it is not bound in `native/src/addon.cc`, so it is not
+ * reachable from JavaScript.
+ *
+ * `msmGPU` previously returned the identity point with `usedGPU: true`. Use
+ * `msmGPUWithFallback` for a result: it catches the throw and computes the MSM
+ * on the CPU, reporting `usedGPU: false`.
  *
  * Requirements: 2.6, 7.3
  */
 
 import type { CurvePoint, CurveConfig, AffinePoint, JacobianPoint } from '../types.js';
 import { getMetalGPU } from './metal.js';
-import { toAffine, createJacobianIdentity } from '../curve/point.js';
-import { ErrorCode, ZkAccelerateError } from '../errors.js';
+import { ErrorCode, ZkAccelerateError, notImplementedError } from '../errors.js';
+
+/**
+ * What is missing between this module and an actual GPU MSM.
+ * @internal
+ */
+export const MISSING_GPU_DISPATCH =
+  'the Metal MSM kernel in native/src/metal_msm.mm is compiled but not bound ' +
+  'in native/src/addon.cc, so no MSM compute kernel can be dispatched from ' +
+  'JavaScript';
 
 /**
  * MSM GPU configuration
@@ -70,8 +86,11 @@ function calculateOptimalWindowSize(numPoints: number): number {
  * Serialize scalars to buffer for GPU
  *
  * Each scalar is 4 x 64-bit limbs = 32 bytes
+ *
+ * Retained for the eventual kernel binding; not used while `msmGPU` throws.
+ * @internal
  */
-function serializeScalars(scalars: bigint[]): Uint8Array {
+export function serializeScalars(scalars: bigint[]): Uint8Array {
   const buffer = new Uint8Array(scalars.length * 32);
   const view = new DataView(buffer.buffer);
 
@@ -95,8 +114,11 @@ function serializeScalars(scalars: bigint[]): Uint8Array {
  * Serialize affine points to buffer for GPU
  *
  * Each point is: x (32 bytes) + y (32 bytes) + is_infinity (4 bytes) + padding (4 bytes) = 72 bytes
+ *
+ * Retained for the eventual kernel binding; not used while `msmGPU` throws.
+ * @internal
  */
-function serializePoints(points: AffinePoint[], _curve: CurveConfig): Uint8Array {
+export function serializePoints(points: AffinePoint[], _curve: CurveConfig): Uint8Array {
   const pointSize = 72; // 32 + 32 + 4 + 4
   const buffer = new Uint8Array(points.length * pointSize);
   const view = new DataView(buffer.buffer);
@@ -193,52 +215,27 @@ export async function msmGPU(
     );
   }
 
-  // Initialize Metal if needed
-  metal.init();
-
   const numPoints = scalars.length;
   const windowSize = config.windowSize ?? calculateOptimalWindowSize(numPoints);
 
-  debugLog(`Starting GPU MSM: ${numPoints} points, window size ${windowSize}`);
+  debugLog(
+    `GPU MSM requested but not dispatchable: ${numPoints} points, window size ${windowSize}, ` +
+      `curve ${curve.name}, ${points.length} input points`
+  );
 
-  // Convert points to affine representation
-  const affinePoints = points.map((p) => toAffine(p, curve));
-
-  // Serialize data for GPU
-  const scalarsData = serializeScalars(scalars);
-  const pointsData = serializePoints(affinePoints, curve);
-
-  // Allocate GPU buffers
-  const scalarsBuffer = metal.allocBuffer(scalarsData.length, true);
-  const pointsBuffer = metal.allocBuffer(pointsData.length, true);
-  const resultBuffer = metal.allocBuffer(96, true); // One Jacobian point
-
-  try {
-    // Copy data to GPU
-    metal.copyToBuffer(scalarsBuffer, scalarsData, 0);
-    metal.copyToBuffer(pointsBuffer, pointsData, 0);
-
-    // Note: The actual GPU MSM execution would happen here via native binding
-    // For now, we return a placeholder result since the full implementation
-    // requires the native MSM kernel to be fully functional
-
-    debugLog('GPU MSM buffers allocated and data copied');
-
-    // Placeholder: Return identity point
-    // In production, this would call the native MSM kernel
-    const resultPoint = createJacobianIdentity(curve);
-
-    return {
-      point: resultPoint,
-      executionTimeMs: 0,
-      usedGPU: true,
-    };
-  } finally {
-    // Cleanup GPU buffers
-    metal.freeBuffer(scalarsBuffer);
-    metal.freeBuffer(pointsBuffer);
-    metal.freeBuffer(resultBuffer);
-  }
+  // No MSM kernel is dispatched from this path. Previously this function
+  // allocated buffers, copied the inputs across, and then returned the
+  // identity point with `usedGPU: true` -- a wrong answer, indistinguishable
+  // from a correct one, for every non-trivial input. Because it neither threw
+  // nor reported unavailability, `msmGPUWithFallback` had no reason to fall
+  // back and handed that identity point to the caller.
+  //
+  // Throwing is what makes the fallback work: `msmGPUWithFallback` catches
+  // this and runs the CPU MSM with `usedGPU: false`.
+  throw notImplementedError('GPU MSM', MISSING_GPU_DISPATCH, {
+    numPoints,
+    curve: curve.name,
+  });
 }
 
 /**

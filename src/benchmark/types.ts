@@ -55,16 +55,25 @@ export interface BenchmarkResult {
  * Hardware utilization metrics
  */
 export interface HardwareUtilization {
-  /** CPU utilization percentage */
+  /**
+   * Share of measured benchmark time spent in CPU-accelerated results, as a
+   * percentage. This is a timing ratio, not CPU occupancy.
+   */
   cpuPercent?: number;
-  /** GPU utilization percentage */
+  /**
+   * Share of measured benchmark time spent in GPU-accelerated results, as a
+   * percentage. This is a timing ratio, not GPU occupancy.
+   */
   gpuPercent?: number;
-  /** Whether AMX was active */
-  amxActive?: boolean;
-  /** Whether SME was active */
-  smeActive?: boolean;
-  /** Memory bandwidth utilization */
+  /**
+   * Memory bandwidth utilization.
+   *
+   * Only set when actually measured; nothing in this package measures it yet.
+   */
   memoryBandwidthPercent?: number;
+  // NOTE: no amxActive/smeActive. Nothing observes whether those units ran, so
+  // there is no honest value to put here. Do not reintroduce them as
+  // `capability && somethingRan`.
 }
 
 /**

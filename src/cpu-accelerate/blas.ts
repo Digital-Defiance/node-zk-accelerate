@@ -9,6 +9,7 @@
  */
 
 import { loadCppBinding } from '../native.js';
+import type { CapabilitySupport } from '../hardware.js';
 import { getCPUAcceleratorStatus } from './status.js';
 
 /**
@@ -21,9 +22,14 @@ export interface BLASOperations {
   isAvailable(): boolean;
 
   /**
-   * Check if AMX acceleration is being used
+   * Whether AMX acceleration is being used.
+   *
+   * Returns `'unknown'` for the native path: Accelerate may or may not route a
+   * given `dgemm` through the matrix coprocessor, and there is no way to
+   * observe which. Returns `false` for the pure-JS path, where it certainly is
+   * not. This never returns `true`, because nothing here can establish it.
    */
-  isAMXAccelerated(): boolean;
+  isAMXAccelerated(): CapabilitySupport;
 
   /**
    * Matrix-matrix multiplication: C = alpha * A * B + beta * C
@@ -95,7 +101,9 @@ class NativeBLASOperations implements BLASOperations {
     return this.binding !== null && getCPUAcceleratorStatus().blasAvailable;
   }
 
-  isAMXAccelerated(): boolean {
+  isAMXAccelerated(): CapabilitySupport {
+    // Accelerate decides internally whether to use the matrix coprocessor and
+    // does not tell us, so this is unknowable rather than true.
     return getCPUAcceleratorStatus().amxAvailable;
   }
 
@@ -198,8 +206,8 @@ class JSBLASOperations implements BLASOperations {
     return true; // JS fallback is always available
   }
 
-  isAMXAccelerated(): boolean {
-    return false; // JS implementation doesn't use AMX
+  isAMXAccelerated(): CapabilitySupport {
+    return false; // Plain JavaScript loops; definitely no AMX.
   }
 
   matrixMul(

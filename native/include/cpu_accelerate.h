@@ -280,7 +280,8 @@ typedef struct {
     bool vdsp_available;
     bool blas_available;
     bool neon_available;
-    bool amx_available;
+    /* NOTE: no amx_available. AMX has no user-space availability query;
+     * see native/src/hardware_detect.cc. */
     bool sme_available;
 } CPUAcceleratorStatus;
 

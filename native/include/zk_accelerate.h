@@ -18,7 +18,6 @@ extern "C" {
  */
 typedef struct {
     bool has_neon;
-    bool has_amx;
     bool has_sme;
     bool has_metal;
     bool unified_memory;
@@ -43,13 +42,14 @@ bool is_apple_silicon(void);
  */
 bool has_neon_support(void);
 
-/**
- * Check AMX availability (via Accelerate framework)
+/*
+ * NOTE: there is deliberately no has_amx_support(). AMX has no supported
+ * user-space availability query, so this addon does not report it at all
+ * rather than infer it from the CPU brand string. See hardware_detect.cc.
  */
-bool has_amx_support(void);
 
 /**
- * Check SME availability (M4+)
+ * Check SME availability (M4+), via hw.optional.arm.FEAT_SME
  */
 bool has_sme_support(void);
 

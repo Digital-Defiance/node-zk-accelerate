@@ -67,31 +67,34 @@ function createPrebuildDir() {
  * Copy native C++ addon
  */
 function copyNativeAddon(prebuildDir) {
+  // The loader (src/native.ts) looks for `zk_accelerate.node` first. Make sure
+  // that name always exists in the prebuild directory, whichever tool produced
+  // the artifact. Previously, when prebuildify had written
+  // `@digitaldefiance+node-zk-accelerate.node`, this function returned early
+  // without ever creating `zk_accelerate.node`, and that was the only file in
+  // the published tarball -- so the addon never loaded for a consumer.
+  const dest = join(prebuildDir, 'zk_accelerate.node');
+  const prebuildifyAddon = join(prebuildDir, '@digitaldefiance+node-zk-accelerate.node');
+
   const sources = [
     join(ROOT_DIR, 'build', 'Release', 'zk_accelerate.node'),
     join(ROOT_DIR, 'build', 'Debug', 'zk_accelerate.node'),
-    // Prebuildify creates the addon with package name format
-    join(ROOT_DIR, 'prebuilds', `${platform}-${arch}`, '@digitaldefiance+node-zk-accelerate.node'),
+    // Prebuildify names the addon after the package
+    prebuildifyAddon,
   ];
 
   for (const src of sources) {
-    if (existsSync(src)) {
-      const dest = join(prebuildDir, 'zk_accelerate.node');
-      // Skip if source and dest are the same (prebuildify output)
-      if (src.includes('prebuilds') && src.includes('@digitaldefiance')) {
-        logSuccess(`Native addon already in prebuilds: ${src}`);
-        return true;
-      }
-      copyFileSync(src, dest);
-      logSuccess(`Copied native addon: ${src}`);
+    if (!existsSync(src)) {
+      continue;
+    }
+
+    if (src === dest) {
+      logSuccess(`Native addon already present: ${dest}`);
       return true;
     }
-  }
 
-  // Check if prebuildify already created the addon
-  const prebuildifyAddon = join(prebuildDir, '@digitaldefiance+node-zk-accelerate.node');
-  if (existsSync(prebuildifyAddon)) {
-    logSuccess(`Native addon created by prebuildify: ${prebuildifyAddon}`);
+    copyFileSync(src, dest);
+    logSuccess(`Copied native addon: ${src} -> ${dest}`);
     return true;
   }
 

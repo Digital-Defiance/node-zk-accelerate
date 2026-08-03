@@ -17,7 +17,7 @@ import { ErrorCode, ZkAccelerateError } from './errors.js';
 export interface NativeCppBinding {
   getHardwareCapabilities(): {
     hasNeon: boolean;
-    hasAmx: boolean;
+    // No hasAmx: the addon cannot detect AMX and no longer reports it.
     hasSme: boolean;
     hasMetal: boolean;
     unifiedMemory: boolean;
@@ -33,7 +33,7 @@ export interface NativeCppBinding {
     vdspAvailable: boolean;
     blasAvailable: boolean;
     neonAvailable: boolean;
-    amxAvailable: boolean;
+    // No amxAvailable: the addon cannot detect AMX and no longer reports it.
     smeAvailable: boolean;
   };
   vdspVectorAdd?(a: Float64Array, b: Float64Array): Float64Array;
@@ -56,7 +56,7 @@ export interface NativeCppBinding {
 export interface NativeRustBinding {
   detectRustCapabilities(): {
     hasNeon: boolean;
-    hasAmx: boolean;
+    // No hasAmx: the Rust addon cannot detect AMX and no longer reports it.
     hasSme: boolean;
     cpuCores: number;
     arch: string;
@@ -70,7 +70,6 @@ export interface NativeRustBinding {
     appleSilicon: boolean;
     capabilities: {
       hasNeon: boolean;
-      hasAmx: boolean;
       hasSme: boolean;
       cpuCores: number;
       arch: string;
@@ -102,21 +101,53 @@ const __dirname = path.dirname(__filename);
 const requireNative = createRequire(import.meta.url);
 
 /**
+ * Locate the package root.
+ *
+ * The compiled entry points live in `dist/esm` or `dist/cjs`, two levels below
+ * the package root, but when running from source (`src/`) it is one level, and
+ * hardcoding two meant the search looked *above* the package and found nothing.
+ * Walk up to the nearest directory containing a package.json instead, and keep
+ * the two-levels-up guess as a fallback.
+ */
+function findPackageRoot(): string {
+  let dir = __dirname;
+
+  for (let i = 0; i < 5; i++) {
+    if (fs.existsSync(path.join(dir, 'package.json'))) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+
+  return path.join(__dirname, '..', '..');
+}
+
+/**
  * Possible paths for native bindings
  */
 function getNativeBindingPaths(): string[] {
   const paths: string[] = [];
-  // Go up from dist/esm or dist/cjs to project root
-  const rootDir = path.join(__dirname, '..', '..');
+  const rootDir = findPackageRoot();
 
-  // Standard node-gyp build locations
+  // Standard node-gyp build locations (present in a local checkout; `build/`
+  // is not shipped in the npm tarball)
   paths.push(path.join(rootDir, 'build', 'Release', 'zk_accelerate.node'));
   paths.push(path.join(rootDir, 'build', 'Debug', 'zk_accelerate.node'));
 
-  // Prebuilt binary locations
-  paths.push(
-    path.join(rootDir, 'prebuilds', `${process.platform}-${process.arch}`, 'zk_accelerate.node')
-  );
+  // Prebuilt binary locations. Two names are searched because two tools
+  // produce the artifact: `scripts/create-prebuilds.js` writes
+  // `zk_accelerate.node` (the node-gyp target name), while `prebuildify`
+  // writes `<scope>+<name>.node`. Only the second was present in the published
+  // 0.1.1 tarball while only the first was searched for, so the addon never
+  // loaded for a consumer. Both are accepted now, and create-prebuilds.js also
+  // makes sure the node-gyp name exists.
+  const prebuildDir = path.join(rootDir, 'prebuilds', `${process.platform}-${process.arch}`);
+  paths.push(path.join(prebuildDir, 'zk_accelerate.node'));
+  paths.push(path.join(prebuildDir, '@digitaldefiance+node-zk-accelerate.node'));
 
   // Development build location
   paths.push(path.join(rootDir, 'native', 'build', 'Release', 'zk_accelerate.node'));
@@ -129,7 +160,7 @@ function getNativeBindingPaths(): string[] {
  */
 function getRustBindingPaths(): string[] {
   const paths: string[] = [];
-  const rootDir = path.join(__dirname, '..', '..');
+  const rootDir = findPackageRoot();
 
   // napi-rs .node file locations (platform-specific)
   const platform = process.platform;
@@ -141,6 +172,10 @@ function getRustBindingPaths(): string[] {
 
   // Check in root directory (installed package)
   paths.push(path.join(rootDir, nodeName));
+
+  // Prebuild directory: create-prebuilds.js copies the Rust addon here, and
+  // this is where it lands in the published tarball
+  paths.push(path.join(rootDir, 'prebuilds', `${platform}-${arch}`, nodeName));
 
   // Legacy locations
   paths.push(path.join(rootDir, 'zk_accelerate_rs.node'));

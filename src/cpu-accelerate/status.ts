@@ -7,6 +7,7 @@
  */
 
 import { loadCppBinding } from '../native.js';
+import type { CapabilitySupport } from '../hardware.js';
 
 /**
  * CPU accelerator status information
@@ -18,8 +19,13 @@ export interface CPUAcceleratorStatus {
   readonly blasAvailable: boolean;
   /** Whether NEON SIMD is available */
   readonly neonAvailable: boolean;
-  /** Whether AMX (Apple Matrix Coprocessor) is available */
-  readonly amxAvailable: boolean;
+  /**
+   * AMX (Apple matrix coprocessor) availability: always `'unknown'`.
+   *
+   * See `HardwareCapabilities.hasAmx`. There is no user-space query for AMX,
+   * so neither the addon nor this module can answer. Do not branch on it.
+   */
+  readonly amxAvailable: CapabilitySupport;
   /** Whether SME (Scalable Matrix Extension) is available (M4+) */
   readonly smeAvailable: boolean;
 }
@@ -39,7 +45,9 @@ function getStatusFromNative(): CPUAcceleratorStatus | null {
   try {
     // Check if the new function exists
     if (binding.getCPUAcceleratorStatus) {
-      return binding.getCPUAcceleratorStatus();
+      const native = binding.getCPUAcceleratorStatus();
+      // The addon does not report AMX; it cannot detect it.
+      return { ...native, amxAvailable: 'unknown' };
     }
   } catch {
     // Function not available in this version of the binding
@@ -52,7 +60,6 @@ function getStatusFromNative(): CPUAcceleratorStatus | null {
  * Get CPU accelerator status using JavaScript fallback
  */
 function getStatusFromJS(): CPUAcceleratorStatus {
-  const isAppleSilicon = process.platform === 'darwin' && process.arch === 'arm64';
   const isMacOS = process.platform === 'darwin';
   const isARM64 = process.arch === 'arm64';
 
@@ -60,7 +67,9 @@ function getStatusFromJS(): CPUAcceleratorStatus {
     vdspAvailable: isMacOS,
     blasAvailable: isMacOS,
     neonAvailable: isARM64,
-    amxAvailable: isAppleSilicon,
+    // Not "isAppleSilicon". Being on Apple Silicon is not evidence that AMX is
+    // present and usable, and there is no query that would be.
+    amxAvailable: 'unknown',
     smeAvailable: false, // Cannot detect SME without native code
   };
 }
@@ -71,9 +80,9 @@ function getStatusFromJS(): CPUAcceleratorStatus {
  * Returns information about which CPU acceleration features are available
  * on the current system. This includes:
  * - vDSP: Apple's vector DSP library for vectorized operations
- * - BLAS: Basic Linear Algebra Subprograms (uses AMX on Apple Silicon)
+ * - BLAS: Basic Linear Algebra Subprograms, via Accelerate
  * - NEON: ARM SIMD instructions
- * - AMX: Apple Matrix Coprocessor (via Accelerate framework)
+ * - AMX: always 'unknown' -- not detectable from user space
  * - SME: Scalable Matrix Extension (M4+ chips)
  *
  * @returns CPU accelerator status object
@@ -113,11 +122,11 @@ export function getCPUAcceleratorStatus(): CPUAcceleratorStatus {
  */
 export function isCPUAccelerationAvailable(): boolean {
   const status = getCPUAcceleratorStatus();
+  // amxAvailable is excluded: 'unknown' is not a yes.
   return (
     status.vdspAvailable ||
     status.blasAvailable ||
     status.neonAvailable ||
-    status.amxAvailable ||
     status.smeAvailable
   );
 }

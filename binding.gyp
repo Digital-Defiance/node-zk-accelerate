@@ -5,7 +5,6 @@
       "sources": [
         "native/src/addon.cc",
         "native/src/hardware_detect.cc",
-        "native/src/field_ops.cc",
         "native/src/vdsp_ops.cc",
         "native/src/blas_ops.cc",
         "native/src/neon_montgomery.cc",

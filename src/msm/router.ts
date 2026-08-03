@@ -154,8 +154,10 @@ export function estimateMsmTime(
 
   switch (path) {
     case 'cpu': {
-      // CPU: ~1-2 µs per point for optimized Pippenger
-      const baseTimePerPoint = caps.hasAmx ? 1.0 : 2.0;
+      // CPU: ~1-2 µs per point for optimized Pippenger.
+      // `=== true` matters: hasAmx is a tri-state and is normally 'unknown',
+      // which is truthy. Treat anything but a definite yes as no.
+      const baseTimePerPoint = caps.hasAmx === true ? 1.0 : 2.0;
       return numPoints * baseTimePerPoint / 1000;
     }
 

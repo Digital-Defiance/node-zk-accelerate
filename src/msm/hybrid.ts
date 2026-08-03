@@ -212,8 +212,9 @@ function estimateCpuTime(
   // Adjust for hardware capabilities
   let timePerPoint = config.cpuTimePerPointUs;
 
-  // AMX provides ~2x speedup for matrix operations
-  if (caps.hasAmx) {
+  // AMX would speed up matrix operations, but hasAmx is a tri-state and is
+  // normally 'unknown' (truthy). Only a definite yes may adjust the estimate.
+  if (caps.hasAmx === true) {
     timePerPoint *= 0.6;
   }
 
@@ -378,7 +379,10 @@ export async function hybridMsm(
         usedHybrid: false,
       };
     } else {
-      // GPU only
+      // GPU only. `msmGPU` currently always rejects (no MSM kernel is bound),
+      // so this branch propagates that rejection rather than substituting a
+      // CPU result and reporting it as `gpuPoints`. Callers who want a
+      // guaranteed result should use `hybridMsmWithFallback`, which catches it.
       const gpuStart = performance.now();
       const gpuConfig = options.windowSize !== undefined ? { windowSize: options.windowSize } : {};
       const gpuResult = await msmGPU(scalars, points, curve, gpuConfig);

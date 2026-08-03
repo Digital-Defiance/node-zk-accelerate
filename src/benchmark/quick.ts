@@ -53,7 +53,10 @@ export async function runQuickBenchmarkMode(): Promise<QuickBenchmarkResult> {
   const hardware = detectHardwareCapabilities();
   console.log(`Hardware: ${hardware.metalDeviceName || 'Apple Silicon'}`);
   console.log(`CPU Cores: ${hardware.cpuCores}`);
-  console.log(`Accelerators: NEON=${hardware.hasNeon}, AMX=${hardware.hasAmx}, SME=${hardware.hasSme}, Metal=${hardware.hasMetal}`);
+  console.log(
+    `Accelerators: NEON=${hardware.hasNeon}, AMX=${hardware.hasAmx}, ` +
+      `SME=${hardware.hasSme}, Metal=${hardware.hasMetal}`
+  );
   console.log('');
 
   // Run benchmarks with quick config

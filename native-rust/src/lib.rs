@@ -12,9 +12,12 @@ use napi_derive::napi;
 pub struct RustHardwareCapabilities {
     /// Whether NEON SIMD is available
     pub has_neon: bool,
-    /// Whether AMX (Apple Matrix Coprocessor) is available
-    pub has_amx: bool,
-    /// Whether SME (Scalable Matrix Extension) is available (M4+)
+    // NOTE: no `has_amx`. AMX has no user-space availability query, so it is
+    // not reported here. The previous implementation returned `true` for any
+    // macOS/aarch64 target, which asserts the coprocessor from the build
+    // target alone. The TypeScript layer reports AMX as 'unknown'.
+    /// Whether SME (Scalable Matrix Extension) is available (M4+),
+    /// as reported by `hw.optional.arm.FEAT_SME`
     pub has_sme: bool,
     /// Number of CPU cores
     pub cpu_cores: u32,
@@ -32,7 +35,6 @@ pub struct RustHardwareCapabilities {
 pub fn detect_rust_capabilities() -> RustHardwareCapabilities {
     RustHardwareCapabilities {
         has_neon: detect_neon(),
-        has_amx: detect_amx(),
         has_sme: detect_sme(),
         cpu_cores: get_cpu_count(),
         arch: get_arch(),
@@ -45,26 +47,10 @@ fn detect_neon() -> bool {
     cfg!(target_arch = "aarch64")
 }
 
-/// Detect AMX support (Apple Silicon via Accelerate framework)
-fn detect_amx() -> bool {
-    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-    {
-        // AMX is available on all Apple Silicon via Accelerate framework
-        true
-    }
-    #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
-    {
-        false
-    }
-}
-
 /// Detect SME support (M4+)
 fn detect_sme() -> bool {
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     {
-        // SME detection requires runtime checks
-        // This is a conservative default - actual detection
-        // would require sysctl calls
         detect_sme_runtime()
     }
     #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
@@ -73,10 +59,14 @@ fn detect_sme() -> bool {
     }
 }
 
-/// Runtime SME detection for macOS
+/// Runtime SME detection for macOS.
+///
+/// Queries `hw.optional.arm.FEAT_SME` and reports what the kernel says. If the
+/// sysctl is unavailable this returns false; it does not fall back to matching
+/// the CPU brand string against "M4", because a marketing name is not a
+/// feature bit.
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 fn detect_sme_runtime() -> bool {
-    use std::ffi::CStr;
     use std::os::raw::{c_char, c_int, c_void};
     
     extern "C" {
@@ -106,28 +96,7 @@ fn detect_sme_runtime() -> bool {
             return value != 0;
         }
     }
-    
-    // Fallback: check CPU brand string for M4
-    let brand_name = b"machdep.cpu.brand_string\0";
-    let mut brand: [u8; 256] = [0; 256];
-    let mut brand_size = 256usize;
-    
-    unsafe {
-        let result = sysctlbyname(
-            brand_name.as_ptr() as *const c_char,
-            brand.as_mut_ptr() as *mut c_void,
-            &mut brand_size,
-            std::ptr::null_mut(),
-            0,
-        );
-        
-        if result == 0 {
-            if let Ok(brand_str) = CStr::from_ptr(brand.as_ptr() as *const c_char).to_str() {
-                return brand_str.contains("M4");
-            }
-        }
-    }
-    
+
     false
 }
 

@@ -22,7 +22,11 @@
   "files": [
     "dist",
     "native",
-    "native-rust",
+    "native-rust/src",
+    "native-rust/build.rs",
+    "native-rust/Cargo.toml",
+    "native-rust/Cargo.lock",
+    "native-rust/package.json",
     "binding.gyp",
     "prebuilds",
     "scripts"

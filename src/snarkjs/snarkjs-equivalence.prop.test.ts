@@ -28,14 +28,23 @@ import {
   R1CS_MAGIC,
 } from './parsers/utils.js';
 import {
-  groth16Verify,
   exportProofToJson,
   importProofFromJson,
 } from './groth16.js';
 import {
-  plonkVerify,
   exportPlonkProofToJson,
 } from './plonk.js';
+import {
+  groth16Prove,
+  groth16ProveSync,
+  groth16Verify,
+  plonkProve,
+  plonkProveSync,
+  plonkVerify,
+} from './unimplemented.js';
+import * as snarkjsPublicApi from './index.js';
+import * as packageRoot from '../index.js';
+import { ErrorCode, ZkAccelerateError } from '../errors.js';
 import type {
   Groth16Proof,
   Groth16VerificationKey,
@@ -315,53 +324,47 @@ describe('Property 12: snarkjs Proof Equivalence', () => {
     });
   });
 
-  describe('Verification Key Validation', () => {
-    // Feature: node-zk-accelerate, Property 12: Groth16 verification with matching public signals
-    it('should accept proofs with correct number of public signals', () => {
+  describe('Verification Refuses to Report a Verdict It Cannot Establish', () => {
+    // These tests replace four earlier ones that asserted the opposite:
+    // "should accept proofs with correct number of public signals" passed
+    // because groth16Verify returned true for any proof whose protocol string
+    // and public-signal count matched, with no pairing check. That is an
+    // accept-everything verifier, and a test asserting it accepts is a test
+    // asserting the vulnerability. Both verifiers now throw.
+
+    // Feature: node-zk-accelerate, Property 12: Groth16 verification never
+    // returns a verdict without a pairing check
+    it('should throw from groth16Verify for every well-formed input', () => {
       fc.assert(
         fc.property(
           arbitraryGroth16VerificationKey(),
           arbitraryGroth16Proof(),
           (vk, proof) => {
-            // Generate matching public signals
             const publicSignals = Array.from(
               { length: vk.nPublic },
               (_, i) => i.toString()
             );
 
-            // Verification should pass basic checks
-            const result = groth16Verify(vk, publicSignals, proof);
-            return typeof result === 'boolean';
-          }
-        ),
-        PROPERTY_TEST_CONFIG
-      );
-    });
+            let thrown: unknown;
+            try {
+              groth16Verify(vk, publicSignals, proof);
+            } catch (error) {
+              thrown = error;
+            }
 
-    // Feature: node-zk-accelerate, Property 12: Groth16 verification rejects wrong signal count
-    it('should reject proofs with wrong number of public signals', () => {
-      fc.assert(
-        fc.property(
-          arbitraryGroth16VerificationKey(),
-          arbitraryGroth16Proof(),
-          (vk, proof) => {
-            // Generate wrong number of public signals
-            const publicSignals = Array.from(
-              { length: vk.nPublic + 1 },
-              (_, i) => i.toString()
+            return (
+              thrown instanceof ZkAccelerateError &&
+              thrown.code === ErrorCode.NOT_IMPLEMENTED
             );
-
-            // Verification should fail
-            const result = groth16Verify(vk, publicSignals, proof);
-            return result === false;
           }
         ),
         PROPERTY_TEST_CONFIG
       );
     });
 
-    // Feature: node-zk-accelerate, Property 12: PLONK verification with matching public signals
-    it('should accept PLONK proofs with correct number of public signals', () => {
+    // Feature: node-zk-accelerate, Property 12: PLONK verification never
+    // returns a verdict without a pairing check
+    it('should throw from plonkVerify for every well-formed input', () => {
       fc.assert(
         fc.property(
           arbitraryPlonkVerificationKey(),
@@ -372,32 +375,93 @@ describe('Property 12: snarkjs Proof Equivalence', () => {
               (_, i) => i.toString()
             );
 
-            const result = plonkVerify(vk, publicSignals, proof);
-            return typeof result === 'boolean';
+            let thrown: unknown;
+            try {
+              plonkVerify(vk, publicSignals, proof);
+            } catch (error) {
+              thrown = error;
+            }
+
+            return (
+              thrown instanceof ZkAccelerateError &&
+              thrown.code === ErrorCode.NOT_IMPLEMENTED
+            );
           }
         ),
         PROPERTY_TEST_CONFIG
       );
     });
 
-    // Feature: node-zk-accelerate, Property 12: PLONK verification rejects wrong signal count
-    it('should reject PLONK proofs with wrong number of public signals', () => {
-      fc.assert(
-        fc.property(
-          arbitraryPlonkVerificationKey(),
-          arbitraryPlonkProof(),
-          (vk, proof) => {
-            const publicSignals = Array.from(
-              { length: vk.nPublic + 1 },
-              (_, i) => i.toString()
-            );
+    it('should name the missing pairing machinery in the error message', () => {
+      const vk = {
+        protocol: 'groth16',
+        curve: 'BN254',
+        nPublic: 0,
+        IC: [],
+      } as unknown as Groth16VerificationKey;
 
-            const result = plonkVerify(vk, publicSignals, proof);
-            return result === false;
-          }
-        ),
-        PROPERTY_TEST_CONFIG
+      expect(() => groth16Verify(vk, [], {} as Groth16Proof)).toThrow(/pairing/i);
+      expect(() =>
+        plonkVerify({} as PlonkVerificationKey, [], {} as PlonkProof)
+      ).toThrow(/pairing/i);
+    });
+  });
+
+  describe('Proving Refuses to Emit a Proof It Cannot Sustain', () => {
+    // The Groth16 prover used to return a proof whose pi_c was the point at
+    // infinity and whose pi_b was copied out of the proving key; the PLONK
+    // sync prover returned all nine commitments as zero and all six
+    // evaluations as 0n. Both are removed rather than left generating a
+    // proof-of-zeros for an accept-everything verifier.
+
+    it('should throw from groth16ProveSync', () => {
+      expect(() => groth16ProveSync(new Uint8Array(0), new Uint8Array(0))).toThrow(
+        ZkAccelerateError
       );
+    });
+
+    it('should throw from plonkProveSync', () => {
+      expect(() => plonkProveSync(new Uint8Array(0), new Uint8Array(0))).toThrow(
+        ZkAccelerateError
+      );
+    });
+
+    it('should throw from groth16Prove and plonkProve', () => {
+      expect(() => groth16Prove(new Uint8Array(0), new Uint8Array(0))).toThrow(
+        /not implemented/i
+      );
+      expect(() => plonkProve(new Uint8Array(0), new Uint8Array(0))).toThrow(
+        /not implemented/i
+      );
+    });
+  });
+
+  describe('Public Export Surface', () => {
+    const removed = [
+      'groth16Prove',
+      'groth16ProveSync',
+      'groth16Verify',
+      'plonkProve',
+      'plonkProveSync',
+      'plonkVerify',
+    ];
+
+    it('should not export provers or verifiers from the snarkjs barrel', () => {
+      for (const name of removed) {
+        expect(Object.keys(snarkjsPublicApi)).not.toContain(name);
+      }
+    });
+
+    it('should not export provers or verifiers from the package root', () => {
+      for (const name of removed) {
+        expect(Object.keys(packageRoot)).not.toContain(name);
+      }
+    });
+
+    it('should still export proof serialisation from the package root', () => {
+      expect(Object.keys(packageRoot)).toContain('exportProofToJson');
+      expect(Object.keys(packageRoot)).toContain('importProofFromJson');
+      expect(Object.keys(packageRoot)).toContain('exportPlonkProofToJson');
     });
   });
 
@@ -416,8 +480,20 @@ describe('Property 12: snarkjs Proof Equivalence', () => {
   });
 
   describe('Protocol Type Validation', () => {
-    // Feature: node-zk-accelerate, Property 12: Groth16 proof protocol field
-    it('should reject non-groth16 proofs in groth16Verify', () => {
+    // The two tests that lived here asserted that groth16Verify returns false
+    // for a proof carrying the wrong `protocol` string, and likewise for
+    // plonkVerify. They passed, but a protocol-string check is not
+    // verification, and their passing was the only evidence anyone had that
+    // these verifiers "worked". A verifier that rejects mislabelled proofs and
+    // accepts everything else is an accept-everything verifier.
+    //
+    // Rejecting a mislabelled proof is now subsumed by the verifiers throwing
+    // for every input, which is covered above. Nothing is asserted here that
+    // was not asserted before.
+
+    // Feature: node-zk-accelerate, Property 12: mislabelled proofs are still
+    // not accepted
+    it('should not accept a proof carrying the wrong protocol string', () => {
       fc.assert(
         fc.property(
           arbitraryGroth16VerificationKey(),
@@ -436,48 +512,14 @@ describe('Property 12: snarkjs Proof Equivalence', () => {
               pi_c: plonkProof.C,
             } as unknown as Groth16Proof;
 
-            const result = groth16Verify(vk, publicSignals, wrongProof);
-            return result === false;
-          }
-        ),
-        PROPERTY_TEST_CONFIG
-      );
-    });
-
-    // Feature: node-zk-accelerate, Property 12: PLONK proof protocol field
-    it('should reject non-plonk proofs in plonkVerify', () => {
-      fc.assert(
-        fc.property(
-          arbitraryPlonkVerificationKey(),
-          arbitraryGroth16Proof(),
-          (vk, groth16Proof) => {
-            const publicSignals = Array.from(
-              { length: vk.nPublic },
-              (_, i) => i.toString()
-            );
-
-            // Cast Groth16 proof as PLONK proof (wrong protocol)
-            const wrongProof = {
-              ...groth16Proof,
-              A: groth16Proof.pi_a,
-              B: groth16Proof.pi_a,
-              C: groth16Proof.pi_c,
-              Z: groth16Proof.pi_a,
-              T1: groth16Proof.pi_a,
-              T2: groth16Proof.pi_a,
-              T3: groth16Proof.pi_a,
-              Wxi: groth16Proof.pi_a,
-              Wxiw: groth16Proof.pi_a,
-              eval_a: 0n,
-              eval_b: 0n,
-              eval_c: 0n,
-              eval_s1: 0n,
-              eval_s2: 0n,
-              eval_zw: 0n,
-            } as unknown as PlonkProof;
-
-            const result = plonkVerify(vk, publicSignals, wrongProof);
-            return result === false;
+            // Not accepted: the call cannot return true, because it cannot
+            // return at all.
+            try {
+              groth16Verify(vk, publicSignals, wrongProof);
+              return false;
+            } catch {
+              return true;
+            }
           }
         ),
         PROPERTY_TEST_CONFIG

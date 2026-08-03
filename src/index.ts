@@ -171,6 +171,7 @@ export {
   hasHardwareAcceleration,
   getHardwareDetectionStatus,
   type HardwareCapabilities,
+  type CapabilitySupport,
 } from './hardware.js';
 
 // ============================================================================
@@ -196,6 +197,7 @@ export {
   unsupportedNttSizeError,
   invalidConfigError,
   internalError,
+  notImplementedError,
 } from './errors.js';
 
 // ============================================================================

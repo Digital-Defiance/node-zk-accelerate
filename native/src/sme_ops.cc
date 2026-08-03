@@ -215,11 +215,9 @@ CPUAcceleratorStatus get_cpu_accelerator_status(void) {
 #ifdef __APPLE__
     status.vdsp_available = true;
     status.blas_available = true;
-    status.amx_available = has_amx_support();
 #else
     status.vdsp_available = false;
     status.blas_available = false;
-    status.amx_available = false;
 #endif
     
     status.neon_available = neon_available();

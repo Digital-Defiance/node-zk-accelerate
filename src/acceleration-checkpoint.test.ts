@@ -66,7 +66,9 @@ describe('Checkpoint 13: Acceleration Layers Complete', () => {
 
       expect(caps).toBeDefined();
       expect(typeof caps.hasNeon).toBe('boolean');
-      expect(typeof caps.hasAmx).toBe('boolean');
+      // hasAmx is a tri-state and is always 'unknown': AMX is not detectable
+      // from user space.
+      expect(caps.hasAmx).toBe('unknown');
       expect(typeof caps.hasSme).toBe('boolean');
       expect(typeof caps.hasMetal).toBe('boolean');
       expect(typeof caps.unifiedMemory).toBe('boolean');
@@ -173,7 +175,9 @@ describe('Checkpoint 13: Acceleration Layers Complete', () => {
         const { buckets, usedSME } = sme.bucketOuterProduct(scalars, points, 3, 1);
 
         expect(buckets).toBeInstanceOf(Float64Array);
-        expect(typeof usedSME).toBe('boolean');
+        // No SME instruction is issued by this implementation, so usedSME is
+        // false regardless of hardware support.
+        expect(usedSME).toBe(false);
       });
     });
   });

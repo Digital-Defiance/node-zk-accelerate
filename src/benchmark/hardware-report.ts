@@ -143,38 +143,38 @@ export function estimatePowerConsumption(
 }
 
 /**
- * Measure hardware utilization during benchmark
+ * Report how the measured benchmark time was distributed across accelerators.
  *
- * Note: Actual hardware utilization measurement requires system-level
- * access that may not be available in Node.js. This provides estimates
- * based on timing data.
+ * `cpuPercent` and `gpuPercent` are shares of the measured mean time of the
+ * supplied results, computed from those timings and nothing else. They are NOT
+ * hardware utilisation: nothing here samples CPU or GPU occupancy, and Node
+ * has no access to the counters that would.
+ *
+ * What this function no longer does:
+ * - It does not add 30 to `cpuPercent` and 70 to `gpuPercent` when a hybrid
+ *   result is present. Those constants were invented.
+ * - It does not report `amxActive`/`smeActive`. Those were
+ *   `capability && a benchmark ran`, which establishes neither that the unit
+ *   was used nor that it exists (AMX is not detectable at all).
+ *
+ * Time spent in `hybrid` results is deliberately counted in neither share,
+ * because the split between CPU and GPU within a hybrid run is not measured
+ * here. `cpuPercent + gpuPercent` will therefore be below 100 when hybrid
+ * results are present.
  */
 export function measureHardwareUtilization(
   results: BenchmarkResult[]
 ): HardwareUtilization {
-  // Analyze results to estimate utilization
   const cpuResults = results.filter((r) => r.accelerator === 'cpu');
   const gpuResults = results.filter((r) => r.accelerator === 'gpu');
-  const hybridResults = results.filter((r) => r.accelerator === 'hybrid');
 
   const totalTime = results.reduce((sum, r) => sum + r.meanMs, 0);
   const cpuTime = cpuResults.reduce((sum, r) => sum + r.meanMs, 0);
   const gpuTime = gpuResults.reduce((sum, r) => sum + r.meanMs, 0);
 
-  // Estimate utilization percentages
-  const cpuPercent = totalTime > 0 ? (cpuTime / totalTime) * 100 : 0;
-  const gpuPercent = totalTime > 0 ? (gpuTime / totalTime) * 100 : 0;
-
-  // Check if AMX/SME were likely active (based on performance characteristics)
-  const hardware = detectHardwareCapabilities();
-  const amxActive = hardware.hasAmx && cpuResults.length > 0;
-  const smeActive = hardware.hasSme && cpuResults.length > 0;
-
   return {
-    cpuPercent: Math.min(100, cpuPercent + (hybridResults.length > 0 ? 30 : 0)),
-    gpuPercent: Math.min(100, gpuPercent + (hybridResults.length > 0 ? 70 : 0)),
-    amxActive,
-    smeActive,
+    cpuPercent: totalTime > 0 ? (cpuTime / totalTime) * 100 : 0,
+    gpuPercent: totalTime > 0 ? (gpuTime / totalTime) * 100 : 0,
   };
 }
 
@@ -296,19 +296,19 @@ function generateRecommendations(
     );
   }
 
-  // Check for SME availability
+  // Check for SME availability. This is a real capability query
+  // (hw.optional.arm.FEAT_SME), but note that no code path in this package
+  // issues SME instructions yet, so the note is about the hardware only.
   if (capabilities.hasSme) {
     recommendations.push(
-      'SME (Scalable Matrix Extension) is available on this M4 chip. Matrix operations will benefit from SME acceleration.'
+      'SME (Scalable Matrix Extension) is reported available by the kernel. ' +
+        'Note that no operation in this package currently issues SME instructions.'
     );
   }
 
-  // Check for AMX
-  if (capabilities.hasAmx) {
-    recommendations.push(
-      'AMX (Apple Matrix Coprocessor) is being used via Accelerate framework for matrix operations.'
-    );
-  }
+  // No AMX recommendation. The previous one asserted that AMX "is being used
+  // via Accelerate framework", which was never observed -- AMX availability is
+  // not detectable and Accelerate does not report what it dispatched to.
 
   // Performance tips based on results
   const msmResults = results.filter((r) => r.operation === 'msm');
@@ -347,7 +347,9 @@ export function formatHardwareReport(report: HardwareReport): string {
   lines.push(`  GPU: ${report.capabilities.metalDeviceName || 'Not detected'}`);
   lines.push(`  GPU Cores: ${report.capabilities.gpuCores || 'Unknown'}`);
   lines.push(`  NEON: ${report.capabilities.hasNeon ? 'Yes' : 'No'}`);
-  lines.push(`  AMX: ${report.capabilities.hasAmx ? 'Yes' : 'No'}`);
+  lines.push(
+    `  AMX: ${report.capabilities.hasAmx === 'unknown' ? 'Unknown (not detectable)' : report.capabilities.hasAmx ? 'Yes' : 'No'}`
+  );
   lines.push(`  SME: ${report.capabilities.hasSme ? 'Yes' : 'No'}`);
   lines.push(`  Metal: ${report.capabilities.hasMetal ? 'Yes' : 'No'}`);
   lines.push(`  Unified Memory: ${report.capabilities.unifiedMemory ? 'Yes' : 'No'}`);

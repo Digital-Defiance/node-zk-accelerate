@@ -39,7 +39,10 @@ export interface SMEOperations {
    * @param points Point coordinates (flattened)
    * @param numBuckets Number of buckets per window
    * @param windowSize Bits per window for bucket indexing
-   * @returns Object with accumulated buckets and whether SME was used
+   * @returns Object with accumulated buckets and `usedSME`, which reports
+   *   whether SME instructions were actually issued for this call -- not
+   *   whether the hardware supports SME. It is currently always false: no
+   *   implementation here issues SME instructions.
    */
   bucketOuterProduct(
     scalars: BigUint64Array,
@@ -58,7 +61,10 @@ export interface SMEOperations {
    * @param m Rows of A and C
    * @param n Columns of B and C
    * @param k Columns of A, rows of B
-   * @returns Object with result matrix and whether SME was used
+   * @returns Object with result matrix and `usedSME`, which reports whether
+   *   SME instructions were actually issued for this call. It is currently
+   *   always false; the work goes through BLAS, which does not say what it
+   *   used internally.
    */
   matrixAccumulate(
     a: Float64Array,
@@ -115,9 +121,12 @@ class NativeSMEOperations implements SMEOperations {
       }
     }
 
-    // On Apple Silicon, this uses AMX via Accelerate framework
-    // On M4+, it may use SME automatically
-    return { buckets, usedSME: this.isAvailable() };
+    // The loop above is plain JavaScript over a Float64Array. No SME
+    // instruction was issued and no native call was made, so usedSME is false
+    // regardless of what the hardware supports. It previously returned
+    // this.isAvailable(), which reported the chip's capability as though it
+    // described the work that had just been done.
+    return { buckets, usedSME: false };
   }
 
   matrixAccumulate(
@@ -127,10 +136,13 @@ class NativeSMEOperations implements SMEOperations {
     n: number,
     k: number
   ): { result: Float64Array; usedSME: boolean } {
-    // Use BLAS which automatically uses the best available hardware
-    // (AMX on M1-M3, SME on M4+ via Accelerate framework)
+    // This calls BLAS (dgemm) through Accelerate. Accelerate may internally
+    // use the matrix coprocessor or SME, but it does not report which, and we
+    // did not issue an SME instruction ourselves. usedSME therefore stays
+    // false: it answers "did this code run SME?", not "might something
+    // underneath have?".
     const result = this.blasOps.matrixMul(a, b, m, n, k);
-    return { result, usedSME: this.isAvailable() };
+    return { result, usedSME: false };
   }
 }
 
@@ -226,7 +238,10 @@ export function getSMEStatus(): {
   const status = getCPUAcceleratorStatus();
 
   let fallbackType: 'amx' | 'blas' | 'js';
-  if (status.amxAvailable) {
+  // 'amx' is only reported if AMX is actually known to be available, which it
+  // never is (see CPUAcceleratorStatus.amxAvailable). What actually runs when
+  // SME is absent is BLAS, so that is what gets reported.
+  if (status.amxAvailable === true) {
     fallbackType = 'amx';
   } else if (status.blasAvailable) {
     fallbackType = 'blas';

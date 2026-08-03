@@ -55,45 +55,30 @@ bool has_neon_support(void) {
     return false;
 }
 
-bool has_amx_support(void) {
-#ifdef __APPLE__
-#if TARGET_CPU_ARM64
-    // AMX is available on all Apple Silicon via Accelerate framework
-    // We detect it by checking for M1 or later
-    char brand[256];
-    size_t size = sizeof(brand);
-    if (sysctlbyname("machdep.cpu.brand_string", &brand, &size, NULL, 0) == 0) {
-        // All Apple Silicon Macs have AMX
-        if (strstr(brand, "Apple") != NULL) {
-            return true;
-        }
-    }
-#endif
-#endif
-    return false;
-}
+// AMX (the Apple matrix coprocessor) is deliberately NOT detected here.
+//
+// There is no supported user-space query for it: no sysctl, no hwcap bit, no
+// documented instruction-availability check. The previous implementation
+// returned true whenever "machdep.cpu.brand_string" contained "Apple", which
+// asserts a capability from the vendor name alone. AMX is also not directly
+// programmable from user space; code reaches it, if at all, only as an
+// implementation detail of the Accelerate framework, which this addon cannot
+// observe. So the capability has been removed from HardwareCapabilities and
+// from the addon's exports rather than reported as a guess. The TypeScript
+// layer reports AMX as 'unknown'.
 
 bool has_sme_support(void) {
 #ifdef __APPLE__
 #if TARGET_CPU_ARM64
-    // SME is available on M4 and later
-    // Check for SME feature flag
+    // SME (Scalable Matrix Extension) is queryable: the kernel publishes the
+    // feature bit. This is a real check, and it is the only one performed --
+    // if the sysctl is absent we report false rather than guessing from the
+    // CPU brand string.
     int64_t sme_available = 0;
     size_t size = sizeof(sme_available);
-    
-    // Try to detect M4 by checking CPU features
-    // SME detection via hw.optional.arm.FEAT_SME
+
     if (sysctlbyname("hw.optional.arm.FEAT_SME", &sme_available, &size, NULL, 0) == 0) {
         return sme_available != 0;
-    }
-    
-    // Fallback: check CPU brand for M4
-    char brand[256];
-    size = sizeof(brand);
-    if (sysctlbyname("machdep.cpu.brand_string", &brand, &size, NULL, 0) == 0) {
-        if (strstr(brand, "M4") != NULL) {
-            return true;
-        }
     }
 #endif
 #endif
@@ -131,7 +116,6 @@ HardwareCapabilities detect_hardware_capabilities(void) {
     memset(&caps, 0, sizeof(caps));
     
     caps.has_neon = has_neon_support();
-    caps.has_amx = has_amx_support();
     caps.has_sme = has_sme_support();
     caps.has_metal = has_metal_support();
     caps.cpu_cores = get_cpu_cores();

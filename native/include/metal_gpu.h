@@ -52,7 +52,9 @@ typedef struct {
     bool device_available;
     bool unified_memory;
     int max_threads_per_group;
-    int max_buffer_length;
+    /* Bytes. Must not be `int`: Apple Silicon reports values above 2^31
+     * (e.g. ~3.1 GB on an M4 Max), which truncated to a negative number. */
+    uint64_t max_buffer_length;
     char device_name[256];
 } MetalGPUStatus;
 

@@ -369,7 +369,10 @@ export async function runBenchmarkSuite(
   console.log('Hardware:', hardware.metalDeviceName || 'Unknown');
   console.log('CPU Cores:', hardware.cpuCores);
   console.log('NEON:', hardware.hasNeon ? 'Yes' : 'No');
-  console.log('AMX:', hardware.hasAmx ? 'Yes' : 'No');
+  console.log(
+    'AMX:',
+    hardware.hasAmx === 'unknown' ? 'Unknown (not detectable)' : hardware.hasAmx ? 'Yes' : 'No'
+  );
   console.log('SME:', hardware.hasSme ? 'Yes' : 'No');
   console.log('Metal:', hardware.hasMetal ? 'Yes' : 'No');
   console.log('');

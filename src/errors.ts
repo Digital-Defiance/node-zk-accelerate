@@ -73,6 +73,14 @@ export enum ErrorCode {
   INTERNAL_ERROR = 'INTERNAL_ERROR',
   /** All fallback options failed */
   FALLBACK_FAILED = 'FALLBACK_FAILED',
+  /**
+   * The requested operation has no working implementation in this build.
+   *
+   * This code is used where a function cannot establish the result it would
+   * have to return. Such a function must throw rather than return a value
+   * that has not been computed or verified.
+   */
+  NOT_IMPLEMENTED = 'NOT_IMPLEMENTED',
 }
 
 /**
@@ -398,4 +406,28 @@ export function invalidConfigError(
  */
 export function internalError(message: string, details?: Record<string, unknown>): ZkAccelerateError {
   return new ZkAccelerateError(message, ErrorCode.INTERNAL_ERROR, details);
+}
+
+/**
+ * Create a "not implemented" error
+ *
+ * Use this where a function has no working implementation and therefore
+ * cannot return a result it has actually computed or verified. The message
+ * must name what is missing so the caller knows why the call cannot succeed.
+ *
+ * @param operation - The operation that has no implementation
+ * @param missing - What is missing, in concrete terms
+ * @param details - Optional details
+ */
+export function notImplementedError(
+  operation: string,
+  missing: string,
+  details?: Record<string, unknown>
+): ZkAccelerateError {
+  return new ZkAccelerateError(
+    `${operation} is not implemented in this build: ${missing}. ` +
+      'This function throws rather than returning an unverified result.',
+    ErrorCode.NOT_IMPLEMENTED,
+    details
+  );
 }

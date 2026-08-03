@@ -28,7 +28,8 @@ Napi::Object GetHardwareCapabilities(const Napi::CallbackInfo& info) {
     
     Napi::Object result = Napi::Object::New(env);
     result.Set("hasNeon", Napi::Boolean::New(env, caps.has_neon));
-    result.Set("hasAmx", Napi::Boolean::New(env, caps.has_amx));
+    // No "hasAmx": AMX has no user-space availability query, so this addon
+    // does not report it. The TypeScript layer surfaces it as 'unknown'.
     result.Set("hasSme", Napi::Boolean::New(env, caps.has_sme));
     result.Set("hasMetal", Napi::Boolean::New(env, caps.has_metal));
     result.Set("unifiedMemory", Napi::Boolean::New(env, caps.unified_memory));
@@ -72,7 +73,7 @@ Napi::Object GetCPUAcceleratorStatus(const Napi::CallbackInfo& info) {
     result.Set("vdspAvailable", Napi::Boolean::New(env, status.vdsp_available));
     result.Set("blasAvailable", Napi::Boolean::New(env, status.blas_available));
     result.Set("neonAvailable", Napi::Boolean::New(env, status.neon_available));
-    result.Set("amxAvailable", Napi::Boolean::New(env, status.amx_available));
+    // No "amxAvailable": see GetHardwareCapabilities above.
     result.Set("smeAvailable", Napi::Boolean::New(env, status.sme_available));
     
     return result;

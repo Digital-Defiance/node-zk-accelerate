@@ -24,7 +24,6 @@ describe('Hardware Capability Detection', () => {
 
       expect(caps).toBeDefined();
       expect(typeof caps.hasNeon).toBe('boolean');
-      expect(typeof caps.hasAmx).toBe('boolean');
       expect(typeof caps.hasSme).toBe('boolean');
       expect(typeof caps.hasMetal).toBe('boolean');
       expect(typeof caps.unifiedMemory).toBe('boolean');
@@ -65,12 +64,31 @@ describe('Hardware Capability Detection', () => {
       }
     });
 
-    it('should detect AMX on Apple Silicon', () => {
+    it('should report AMX as unknown, never as detected', () => {
+      // Replaces "should detect AMX on Apple Silicon", which asserted
+      // hasAmx === true on any Apple Silicon machine. Nothing detected AMX;
+      // the native check was `strstr(brand, "Apple")`. There is no supported
+      // user-space query, so the only honest answer is 'unknown', on every
+      // platform and regardless of which binding is loaded.
       const caps = detectHardwareCapabilities();
 
-      if (process.platform === 'darwin' && process.arch === 'arm64') {
-        expect(caps.hasAmx).toBe(true);
+      expect(caps.hasAmx).toBe('unknown');
+      expect(caps.hasAmx).not.toBe(true);
+    });
+
+    it('should not count an unknown capability as hardware acceleration', () => {
+      // hasHardwareAcceleration used to OR in hasAmx. With a tri-state, the
+      // truthy string 'unknown' would have made this true on any platform.
+      const caps = detectHardwareCapabilities();
+      const accelerated = hasHardwareAcceleration();
+
+      if (!caps.hasNeon && !caps.hasSme && !caps.hasMetal) {
+        expect(accelerated).toBe(false);
       }
+    });
+
+    it('should show AMX as not detectable in the summary', () => {
+      expect(getHardwareCapabilitiesSummary()).toContain('AMX: ? (not detectable)');
     });
 
     it('should detect unified memory on Apple Silicon', () => {
@@ -100,12 +118,15 @@ describe('Hardware Capability Detection', () => {
     it('should include check marks or crosses for each capability', () => {
       const summary = getHardwareCapabilitiesSummary();
 
-      // Should contain either ✓ or ✗ for each capability
+      // Should contain either ✓ or ✗ for each capability that is actually
+      // known: NEON, SME, Metal and Unified Memory. AMX deliberately gets
+      // neither mark, because neither would be true -- it renders as
+      // '? (not detectable)'.
       const checkCount = (summary.match(/✓/g) || []).length;
       const crossCount = (summary.match(/✗/g) || []).length;
 
-      // Should have at least 5 status indicators (NEON, AMX, SME, Metal, Unified Memory)
-      expect(checkCount + crossCount).toBeGreaterThanOrEqual(5);
+      expect(checkCount + crossCount).toBeGreaterThanOrEqual(4);
+      expect(summary).toContain('AMX: ? (not detectable)');
     });
   });
 

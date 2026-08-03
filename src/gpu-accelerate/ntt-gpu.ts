@@ -1,15 +1,37 @@
 /**
- * GPU-accelerated NTT (Number Theoretic Transform)
+ * GPU NTT (Number Theoretic Transform) entry points
  *
- * This module provides Metal GPU acceleration for NTT operations
- * using the Cooley-Tukey butterfly algorithm.
+ * ## Status: no GPU NTT is dispatched from this module
+ *
+ * `forwardNttGPU`, `inverseNttGPU` and `batchNttGPU` throw. There is no path
+ * from TypeScript to an NTT compute kernel: `native/src/metal_ntt.mm` contains
+ * `metal_gpu_ntt_forward`, `metal_gpu_ntt_inverse` and `metal_gpu_ntt_batch`,
+ * and it is compiled by `binding.gyp`, but none of those functions is bound in
+ * `native/src/addon.cc`, so none of them is reachable. Nothing in this module
+ * can therefore produce a transformed result.
+ *
+ * These functions previously allocated Metal buffers, copied the input into
+ * them, and returned the *untransformed input* with `usedGPU: true`. A caller
+ * had no way to tell that no transform had been applied. They now throw.
+ *
+ * Use `forwardNttGPUWithFallback` if you want a result: it catches the throw
+ * and runs the supplied CPU transform, reporting `usedGPU: false`.
  *
  * Requirements: 3.7, 7.4, 7.6
  */
 
 import type { FieldElement, FieldConfig } from '../types.js';
 import { getMetalGPU } from './metal.js';
-import { ErrorCode, ZkAccelerateError } from '../errors.js';
+import { ErrorCode, ZkAccelerateError, notImplementedError } from '../errors.js';
+
+/**
+ * What is missing between this module and an actual GPU NTT.
+ * @internal
+ */
+export const MISSING_GPU_DISPATCH =
+  'the Metal NTT kernels in native/src/metal_ntt.mm are compiled but not ' +
+  'bound in native/src/addon.cc, so no NTT compute kernel can be dispatched ' +
+  'from JavaScript';
 
 /**
  * NTT GPU configuration
@@ -66,8 +88,12 @@ export function calculateOptimalGroupSize(n: number, maxThreads: number): number
  * Serialize field elements to buffer for GPU
  *
  * Each field element is 4 x 64-bit limbs = 32 bytes
+ *
+ * Retained for the eventual kernel binding; not used while the NTT entry
+ * points throw.
+ * @internal
  */
-function serializeFieldElements(elements: FieldElement[]): Uint8Array {
+export function serializeFieldElements(elements: FieldElement[]): Uint8Array {
   const buffer = new Uint8Array(elements.length * 32);
   const view = new DataView(buffer.buffer);
 
@@ -150,41 +176,15 @@ export async function forwardNttGPU(
     );
   }
 
-  debugLog(`Starting GPU forward NTT: n=${n}`);
+  debugLog(`GPU forward NTT requested but not dispatchable: n=${n}, twiddles=${twiddles.length}`);
 
-  // Field config will be used when full GPU implementation is complete
-  // const field = coefficients[0]!.field;
-
-  // Serialize data for GPU
-  const coeffData = serializeFieldElements(coefficients);
-  const twiddleData = serializeFieldElements(twiddles);
-
-  // Allocate GPU buffers
-  const dataBuffer = metal.allocBuffer(coeffData.length, true);
-  const twiddleBuffer = metal.allocBuffer(twiddleData.length, true);
-
-  try {
-    // Copy data to GPU
-    metal.copyToBuffer(dataBuffer, coeffData, 0);
-    metal.copyToBuffer(twiddleBuffer, twiddleData, 0);
-
-    debugLog('GPU NTT buffers allocated and data copied');
-
-    // Note: The actual GPU NTT execution would happen here via native binding
-    // For now, we return the input as placeholder since the full implementation
-    // requires the native NTT kernel to be fully functional
-
-    // Placeholder: Return input coefficients
-    return {
-      values: coefficients,
-      executionTimeMs: 0,
-      usedGPU: true,
-    };
-  } finally {
-    // Cleanup GPU buffers
-    metal.freeBuffer(dataBuffer);
-    metal.freeBuffer(twiddleBuffer);
-  }
+  // No NTT kernel is dispatched from this path. Previously this function
+  // allocated buffers, copied the input across and then returned that same
+  // input with `usedGPU: true`, which reported GPU work that never happened
+  // and silently produced an untransformed result. Throw instead: callers that
+  // want a result should use `forwardNttGPUWithFallback`, which catches this
+  // and runs the CPU transform with `usedGPU: false`.
+  throw notImplementedError('GPU forward NTT', MISSING_GPU_DISPATCH, { n });
 }
 
 /**
@@ -225,41 +225,15 @@ export async function inverseNttGPU(
     );
   }
 
-  debugLog(`Starting GPU inverse NTT: n=${n}`);
+  debugLog(
+    `GPU inverse NTT requested but not dispatchable: n=${n}, twiddles=${twiddlesInv.length}, ` +
+      `nInv limbs=${nInv.limbs.length}`
+  );
 
-  // Field config will be used when full GPU implementation is complete
-  // const field = values[0]!.field;
-
-  // Serialize data for GPU
-  const valuesData = serializeFieldElements(values);
-  const twiddleInvData = serializeFieldElements(twiddlesInv);
-  const nInvData = serializeFieldElements([nInv]);
-
-  // Allocate GPU buffers
-  const dataBuffer = metal.allocBuffer(valuesData.length, true);
-  const twiddleInvBuffer = metal.allocBuffer(twiddleInvData.length, true);
-  const nInvBuffer = metal.allocBuffer(nInvData.length, true);
-
-  try {
-    // Copy data to GPU
-    metal.copyToBuffer(dataBuffer, valuesData, 0);
-    metal.copyToBuffer(twiddleInvBuffer, twiddleInvData, 0);
-    metal.copyToBuffer(nInvBuffer, nInvData, 0);
-
-    debugLog('GPU inverse NTT buffers allocated and data copied');
-
-    // Placeholder: Return input values
-    return {
-      values: values,
-      executionTimeMs: 0,
-      usedGPU: true,
-    };
-  } finally {
-    // Cleanup GPU buffers
-    metal.freeBuffer(dataBuffer);
-    metal.freeBuffer(twiddleInvBuffer);
-    metal.freeBuffer(nInvBuffer);
-  }
+  // See forwardNttGPU: no kernel is dispatched, so this must not report a
+  // result. Returning the untransformed input with `usedGPU: true` was wrong
+  // twice over.
+  throw notImplementedError('GPU inverse NTT', MISSING_GPU_DISPATCH, { n });
 }
 
 /**
@@ -316,14 +290,12 @@ export async function batchNttGPU(
     );
   }
 
-  debugLog(`Starting GPU batch NTT: n=${n}, batch_size=${batchSize}, forward=${forward}`);
+  debugLog(
+    `GPU batch NTT requested but not dispatchable: n=${n}, batch_size=${batchSize}, forward=${forward}`
+  );
 
-  // Placeholder: Return input polynomials
-  return polynomials.map((poly) => ({
-    values: poly,
-    executionTimeMs: 0,
-    usedGPU: true,
-  }));
+  // See forwardNttGPU: no kernel is dispatched.
+  throw notImplementedError('GPU batch NTT', MISSING_GPU_DISPATCH, { n, batchSize, forward });
 }
 
 /**

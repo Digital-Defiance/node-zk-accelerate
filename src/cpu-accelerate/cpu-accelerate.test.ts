@@ -13,6 +13,7 @@ import {
   createNEONOperations,
   createSMEOperations,
 } from './index.js';
+import { getSMEStatus } from './sme.js';
 import { BN254_FIELD } from '../field/config.js';
 
 describe('CPU Accelerator Status', () => {
@@ -28,8 +29,17 @@ describe('CPU Accelerator Status', () => {
     expect(typeof status.vdspAvailable).toBe('boolean');
     expect(typeof status.blasAvailable).toBe('boolean');
     expect(typeof status.neonAvailable).toBe('boolean');
-    expect(typeof status.amxAvailable).toBe('boolean');
     expect(typeof status.smeAvailable).toBe('boolean');
+  });
+
+  it('should report AMX as unknown rather than claiming it', () => {
+    // AMX has no user-space availability query. Reporting `true` because the
+    // CPU brand string contains "Apple" is a claim about the vendor, not the
+    // coprocessor, so the answer is 'unknown' on every platform.
+    const status = getCPUAcceleratorStatus();
+
+    expect(status.amxAvailable).toBe('unknown');
+    expect(status.amxAvailable).not.toBe(true);
   });
 
   it('should detect platform-specific features correctly', () => {
@@ -46,10 +56,8 @@ describe('CPU Accelerator Status', () => {
       expect(status.neonAvailable).toBe(true);
     }
 
-    if (process.platform === 'darwin' && process.arch === 'arm64') {
-      // Apple Silicon should have AMX
-      expect(status.amxAvailable).toBe(true);
-    }
+    // No AMX assertion here: being on Apple Silicon is not evidence that the
+    // matrix coprocessor is present and reachable. See the dedicated test.
   });
 
   it('should report acceleration availability', () => {
@@ -168,8 +176,15 @@ describe('BLAS Operations', () => {
     expect(typeof blas.isAvailable()).toBe('boolean');
   });
 
-  it('should report AMX acceleration status', () => {
-    expect(typeof blas.isAMXAccelerated()).toBe('boolean');
+  it('should report AMX acceleration status as a three-state value', () => {
+    // This assertion used to be `toBe('boolean')`, which encoded the very
+    // claim that was removed: that AMX availability is knowable and therefore
+    // expressible as true/false. It is not. isAMXAccelerated returns
+    // CapabilitySupport, so 'unknown' is a legitimate answer and the honest
+    // one on the native path. See 'should never claim AMX acceleration' below,
+    // which pins the values rather than just the type.
+    const amx = blas.isAMXAccelerated();
+    expect(amx === 'unknown' || typeof amx === 'boolean').toBe(true);
   });
 
   it('should perform matrix multiplication', () => {
@@ -265,7 +280,11 @@ describe('SME Operations', () => {
 
     expect(buckets).toBeInstanceOf(Float64Array);
     expect(buckets.length).toBe(4);
-    expect(typeof usedSME).toBe('boolean');
+    // The accumulation is a plain JavaScript loop. No SME instruction is
+    // issued, so usedSME must be false even on hardware that has SME. It
+    // previously returned isAvailable(), which described the chip rather than
+    // the work.
+    expect(usedSME).toBe(false);
 
     // Bucket 0 (scalar 1): points[0] + points[2] = 1 + 3 = 4
     expect(buckets[0]).toBe(4);
@@ -282,12 +301,39 @@ describe('SME Operations', () => {
 
     expect(result).toBeInstanceOf(Float64Array);
     expect(result.length).toBe(4);
-    expect(typeof usedSME).toBe('boolean');
+    // The work goes through BLAS, which does not report what it dispatched to.
+    // usedSME answers "did this code issue SME instructions?" -- it did not.
+    expect(usedSME).toBe(false);
 
     // Same as BLAS matrix multiplication
     expect(result[0]).toBe(19);
     expect(result[1]).toBe(22);
     expect(result[2]).toBe(43);
     expect(result[3]).toBe(50);
+  });
+});
+
+describe('BLAS AMX attribution', () => {
+  const blas = createBLASOperations();
+
+  it('should never claim AMX acceleration', () => {
+    // Accelerate decides internally whether a dgemm reaches the matrix
+    // coprocessor and does not report it, so the only honest answers are
+    // 'unknown' (native path) and false (pure JS path).
+    const amx = blas.isAMXAccelerated();
+
+    expect(amx === 'unknown' || amx === false).toBe(true);
+    expect(amx).not.toBe(true);
+  });
+});
+
+describe('SME status fallback reporting', () => {
+  it('should report the fallback that actually runs', () => {
+    // fallbackType used to be 'amx' whenever amxAvailable was true, which was
+    // any Apple Silicon machine. What actually runs is BLAS.
+    const status = getSMEStatus();
+
+    expect(status.fallbackType).not.toBe('amx');
+    expect(['blas', 'js']).toContain(status.fallbackType);
   });
 });

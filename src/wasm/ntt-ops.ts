@@ -18,32 +18,82 @@ import {
 } from './field-ops.js';
 
 /**
- * Compute primitive n-th root of unity for the field
+ * Modular exponentiation, base^exp mod modulus
  */
-function computeRootOfUnity(n: number, field: FieldConfig): FieldElement {
-  // For BN254 scalar field, the primitive root is known
-  // This is a simplified implementation - production would use precomputed values
-  const modulus = field.modulus;
-
-  // Find generator g such that g^((p-1)/n) is a primitive n-th root
-  // For simplicity, we use a known generator and compute the root
-  const generator = 5n; // Common generator for many fields
-  const exponent = (modulus - 1n) / BigInt(n);
-
-  // Compute g^exponent mod p
+function modPow(base: bigint, exp: bigint, modulus: bigint): bigint {
   let result = 1n;
-  let base = generator % modulus;
-  let exp = exponent;
+  let b = base % modulus;
+  let e = exp;
 
-  while (exp > 0n) {
-    if (exp & 1n) {
-      result = (result * base) % modulus;
+  while (e > 0n) {
+    if (e & 1n) {
+      result = (result * b) % modulus;
     }
-    base = (base * base) % modulus;
-    exp >>= 1n;
+    b = (b * b) % modulus;
+    e >>= 1n;
   }
 
-  return createFieldElementFromBigint(result, field);
+  return result;
+}
+
+/**
+ * Compute a primitive n-th root of unity for the field, and verify it.
+ *
+ * `src/ntt/config.ts` (`findPrimitiveRoot`) is the reference implementation of
+ * these checks; this is the same set of checks applied to the WASM fallback
+ * path, which previously had none:
+ *
+ *  1. n divides p-1. Without this, `(p-1)/n` is a floor division and
+ *     `g^((p-1)/n)` is not an n-th root of unity at all -- it is an unrelated
+ *     field element, and the transform silently computes nonsense.
+ *  2. omega^n == 1, so omega really is an n-th root of unity.
+ *  3. omega^(n/2) != 1, so omega has order exactly n rather than a proper
+ *     divisor of n. Without this the twiddle factors repeat early and the
+ *     transform is not invertible.
+ *
+ * The generator 5 is correct for both supported scalar fields -- it is a
+ * quadratic non-residue modulo the BN254 and BLS12-381 scalar field moduli --
+ * but it is not correct for an arbitrary field, and nothing here restricts the
+ * caller to those two. Check 3 is what catches a bad generator: if 5 is a
+ * square mod p then omega^(n/2) == 1 and this throws instead of returning a
+ * root that does not generate the required subgroup.
+ *
+ * @throws {Error} if n does not divide p-1, or if the computed value is not a
+ *   primitive n-th root of unity
+ */
+function computeRootOfUnity(n: number, field: FieldConfig): FieldElement {
+  const modulus = field.modulus;
+  const pMinus1 = modulus - 1n;
+  const nBig = BigInt(n);
+
+  // 1. n must divide p-1, or the exponent below is a floor division and the
+  //    result bears no relation to an n-th root of unity.
+  if (pMinus1 % nBig !== 0n) {
+    throw new Error(
+      `NTT size ${n} does not divide p-1 for this field, so no primitive ${n}-th root of unity exists`
+    );
+  }
+
+  const generator = 5n;
+  const omega = modPow(generator, pMinus1 / nBig, modulus);
+
+  // 2. omega^n must be 1.
+  if (modPow(omega, nBig, modulus) !== 1n) {
+    throw new Error(
+      `Computed value is not an ${n}-th root of unity for this field ` +
+        `(generator ${generator} is not usable here)`
+    );
+  }
+
+  // 3. omega^(n/2) must not be 1, or omega's order is a proper divisor of n.
+  if (n > 1 && modPow(omega, nBig / 2n, modulus) === 1n) {
+    throw new Error(
+      `Computed ${n}-th root of unity is not primitive for this field ` +
+        `(generator ${generator} is not a quadratic non-residue here)`
+    );
+  }
+
+  return createFieldElementFromBigint(omega, field);
 }
 
 /**

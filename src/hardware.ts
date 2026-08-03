@@ -3,9 +3,10 @@
  *
  * Detects available hardware acceleration features on the system:
  * - NEON SIMD (ARM64)
- * - AMX (Apple Matrix Coprocessor via Accelerate framework)
- * - SME (Scalable Matrix Extension, M4+)
+ * - SME (Scalable Matrix Extension, M4+), via hw.optional.arm.FEAT_SME
  * - Metal GPU compute
+ *
+ * AMX is reported as 'unknown': it has no user-space availability query.
  *
  * Requirements: 6.1, 6.7, 7.1, 7.7
  */
@@ -14,13 +15,31 @@ import { loadCppBinding, loadRustBinding, getNativeBindingStatus } from './nativ
 import os from 'os';
 
 /**
+ * A capability that cannot always be determined.
+ *
+ * `true` and `false` mean the capability was actually queried and the answer
+ * is known. `'unknown'` means no supported query exists, so no claim is made
+ * in either direction. Treat `'unknown'` as "do not rely on this".
+ */
+export type CapabilitySupport = boolean | 'unknown';
+
+/**
  * Hardware capabilities detected on the system
  */
 export interface HardwareCapabilities {
   /** Whether NEON SIMD is available (ARM64) */
   readonly hasNeon: boolean;
-  /** Whether AMX (Apple Matrix Coprocessor) is available via Accelerate */
-  readonly hasAmx: boolean;
+  /**
+   * AMX (Apple matrix coprocessor) availability.
+   *
+   * Always `'unknown'`. macOS exposes no user-space query for AMX -- no
+   * sysctl, no hwcap bit -- and AMX is not directly programmable from user
+   * space; it is an internal detail of the Accelerate framework. Earlier
+   * versions reported `true` whenever the CPU brand string contained "Apple",
+   * which is a claim about the vendor, not about the coprocessor. Nothing in
+   * this package should branch on AMX being present.
+   */
+  readonly hasAmx: CapabilitySupport;
   /** Whether SME (Scalable Matrix Extension) is available (M4+) */
   readonly hasSme: boolean;
   /** Whether Metal GPU compute is available */
@@ -74,12 +93,10 @@ function detectNeonJS(): boolean {
 }
 
 /**
- * Detect AMX support using pure JavaScript
- * AMX is available on all Apple Silicon via Accelerate framework
+ * AMX availability is not detectable from JavaScript, and not detectable from
+ * the native addon either. See `HardwareCapabilities.hasAmx`.
  */
-function detectAmxJS(): boolean {
-  return detectAppleSiliconJS();
-}
+const AMX_SUPPORT: CapabilitySupport = 'unknown';
 
 /**
  * Detect SME support using pure JavaScript
@@ -118,7 +135,7 @@ function detectHardwareCapabilitiesJS(): HardwareCapabilities {
 
   const result: HardwareCapabilities = {
     hasNeon: detectNeonJS(),
-    hasAmx: detectAmxJS(),
+    hasAmx: AMX_SUPPORT,
     hasSme: detectSmeJS(),
     hasMetal: detectMetalJS(),
     unifiedMemory: isAppleSilicon,
@@ -144,7 +161,8 @@ function detectHardwareCapabilitiesCpp(): HardwareCapabilities | null {
 
     const result: HardwareCapabilities = {
       hasNeon: caps.hasNeon,
-      hasAmx: caps.hasAmx,
+      // The addon no longer reports AMX; it cannot detect it.
+      hasAmx: AMX_SUPPORT,
       hasSme: caps.hasSme,
       hasMetal: caps.hasMetal,
       unifiedMemory: caps.unifiedMemory,
@@ -193,7 +211,8 @@ function detectHardwareCapabilitiesRust(): HardwareCapabilities | null {
 
     const result: HardwareCapabilities = {
       hasNeon: caps.hasNeon,
-      hasAmx: caps.hasAmx,
+      // The Rust addon's hasAmx is the same brand-string guess; ignore it.
+      hasAmx: AMX_SUPPORT,
       hasSme: caps.hasSme,
       hasMetal: process.platform === 'darwin', // Rust doesn't detect Metal directly
       unifiedMemory: isAppleSilicon,
@@ -217,7 +236,7 @@ let cachedCapabilities: HardwareCapabilities | null = null;
  *
  * This function detects available hardware acceleration features:
  * - NEON SIMD (available on all ARM64 processors)
- * - AMX (Apple Matrix Coprocessor, available on Apple Silicon via Accelerate)
+ * - AMX: always reported as 'unknown' (no user-space query exists)
  * - SME (Scalable Matrix Extension, available on M4 and later)
  * - Metal GPU compute (available on macOS)
  *
@@ -301,12 +320,19 @@ export function clearHardwareCapabilitiesCache(): void {
  * // Hardware Capabilities:
  * //   CPU: 12 cores
  * //   NEON SIMD: ✓
- * //   AMX: ✓
+ * //   AMX: ? (not detectable)
  * //   SME: ✗
  * //   Metal GPU: ✓ (Apple M4 Max, 40 cores)
  * //   Unified Memory: ✓
  * ```
  */
+function formatCapability(value: CapabilitySupport, check: string, cross: string): string {
+  if (value === 'unknown') {
+    return '? (not detectable)';
+  }
+  return value ? check : cross;
+}
+
 export function getHardwareCapabilitiesSummary(): string {
   const caps = detectHardwareCapabilities();
   const check = '✓';
@@ -316,7 +342,7 @@ export function getHardwareCapabilitiesSummary(): string {
     'Hardware Capabilities:',
     `  CPU: ${caps.cpuCores} cores`,
     `  NEON SIMD: ${caps.hasNeon ? check : cross}`,
-    `  AMX: ${caps.hasAmx ? check : cross}`,
+    `  AMX: ${formatCapability(caps.hasAmx, check, cross)}`,
     `  SME: ${caps.hasSme ? check : cross}`,
   ];
 
@@ -341,7 +367,8 @@ export function getHardwareCapabilitiesSummary(): string {
  */
 export function hasHardwareAcceleration(): boolean {
   const caps = detectHardwareCapabilities();
-  return caps.hasNeon || caps.hasAmx || caps.hasSme || caps.hasMetal;
+  // hasAmx is excluded: it is never known, and 'unknown' is not a yes.
+  return caps.hasNeon || caps.hasSme || caps.hasMetal;
 }
 
 /**
