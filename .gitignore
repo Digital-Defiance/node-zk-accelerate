@@ -33,3 +33,9 @@ npm-debug.log*
 # Environment
 .env
 .env.local
+
+# Rust build cache. This was tracked, which churned ~200 files on every build
+# and shipped 1137 files in the 0.1.1 tarball. The npm `files` allowlist ships
+# native-rust/src, build.rs, Cargo.toml and Cargo.lock -- the inputs needed to
+# build from source -- so nothing here belongs in git or in the package.
+native-rust/target/

@@ -1,1 +1,0 @@
-/Volumes/Code/source/repos/node-zk-accelerate/native-rust/target/aarch64-apple-darwin/release/libzk_accelerate_rs.dylib: /Volumes/Code/source/repos/node-zk-accelerate/native-rust/build.rs /Volumes/Code/source/repos/node-zk-accelerate/native-rust/src/lib.rs
