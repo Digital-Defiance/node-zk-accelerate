@@ -1,6 +1,6 @@
 {
   "name": "@digitaldefiance/node-zk-accelerate",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Zero-Knowledge Proof acceleration library for Node.js maximizing Apple Silicon M4 Max hardware utilization",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
