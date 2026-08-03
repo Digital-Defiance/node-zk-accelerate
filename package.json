@@ -97,7 +97,6 @@
     "arm64"
   ],
   "dependencies": {
-    "@digitaldefiance/node-fhe-accelerate": "^0.1.0",
     "node-addon-api": "^7.0.0",
     "node-gyp-build": "^4.8.0"
   },

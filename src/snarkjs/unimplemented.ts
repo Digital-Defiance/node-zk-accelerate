@@ -17,8 +17,13 @@
  * - There is no Miller loop and no final exponentiation, in TypeScript, in the
  *   C++ addon (`native/src/`) or in the Rust addon (`native-rust/src/`).
  * - No pairing-capable dependency is available: the only runtime dependencies
- *   are `@digitaldefiance/node-fhe-accelerate`, `node-addon-api` and
- *   `node-gyp-build`.
+ *   are `node-addon-api` and `node-gyp-build`.
+ *
+ *   (This list previously also named `@digitaldefiance/node-fhe-accelerate`.
+ *   That dependency was declared in package.json but imported nowhere in this
+ *   package -- not in `src/`, not in the built output, not in either addon --
+ *   so every consumer installed it for nothing. It has been removed. It also
+ *   would not have helped: it ships no pairing implementation either.)
  *
  * Earlier releases shipped `groth16Verify` and `plonkVerify` that checked the
  * `protocol` string and the public-signal count and then returned `true`, and
