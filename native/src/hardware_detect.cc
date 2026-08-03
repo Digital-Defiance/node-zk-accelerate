@@ -11,6 +11,11 @@
 #include <sys/types.h>
 #include <mach/machine.h>
 #include <TargetConditionals.h>
+// Metal availability is answered by metal_gpu.mm, which is the only place that
+// creates a device. This header is extern "C", so a C++ translation unit can
+// call into the Objective-C++ one. has_metal_support() delegates rather than
+// reimplementing, so there is exactly one Metal check in the addon.
+#include "../include/metal_gpu.h"
 #endif
 
 #ifdef __linux__
@@ -86,10 +91,28 @@ bool has_sme_support(void) {
 }
 
 bool has_metal_support(void) {
-    // Metal support is checked in metal_compute.mm for macOS
-    // This is a placeholder that returns false on non-Apple platforms
+    // This used to `return true` for every __APPLE__ build without ever asking
+    // Metal anything, with a comment saying it "will be verified by Metal
+    // initialization". Nothing verified it. Every Mac reported Metal support,
+    // including ones where device creation would fail, and the answer was
+    // indistinguishable from a real check to any caller.
+    //
+    // It now delegates to metal_gpu_is_available(), which lazily performs the
+    // real sequence -- MTLCreateSystemDefaultDevice(), then newCommandQueue --
+    // and reports whether it succeeded. So a true result means Metal was
+    // actually reached on THIS machine, not that the code was compiled for a
+    // Mac.
+    //
+    // Two properties of that delegation worth knowing. First, it is not free:
+    // the first call initialises the device, the command queue and the default
+    // shader library. Detection therefore has a one-time cost, which is the
+    // price of the answer being real. Second, it reports usability rather than
+    // mere presence -- if a device exists but the command queue cannot be
+    // created, metal_gpu.mm nulls the device and this returns false. For a
+    // library deciding whether to dispatch GPU work, usable is the question
+    // worth answering.
 #ifdef __APPLE__
-    return true; // Will be verified by Metal initialization
+    return metal_gpu_is_available();
 #else
     return false;
 #endif
